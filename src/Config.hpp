@@ -32,7 +32,7 @@ typedef sdsl::select_support_mcl<0> bv_select0_type;
 
 // typedef sdsl::wm_int<bit_vector> wm_type;
 typedef sdsl::wt_gmr<int_vector<>,
-                     inv_multi_perm_support<64, int_vector<>>,
+                     inv_multi_perm_support<32, int_vector<>>,
                      bit_vector,
                      bv_select_type,
                      bv_select0_type>

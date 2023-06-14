@@ -6,6 +6,7 @@
 #include <sdsl/construct.hpp>
 #include "nav_graph.hpp"
 #include "query_config.hpp"
+#include "Config.hpp"
 
 using namespace std;
 
@@ -14,7 +15,6 @@ using timer = std::chrono::high_resolution_clock;
 
 int main(int argc, char **argv)
 {
-    bool write_output = false;
 
     if (argc < 3)
     {
@@ -26,6 +26,7 @@ int main(int argc, char **argv)
     {
         cout << "  Usage: " << argv[0] << " <ring-index-file> <queries-file>" << endl;
         cout << " -o <output-file>:  saves in <output-file>  the time used + the number of pairs obtained for each query" << endl;
+        cout << " --pairs: use with -o to also save the pairs obtained" << endl;
     }
 
     // handle -o
@@ -37,10 +38,14 @@ int main(int argc, char **argv)
         out.open(output_file, ofstream::out | ofstream::trunc);
         out.close();
 
-        // output_file_pairs.append("_pairs");
-        // out.open(output_file_pairs, ofstream::out | ofstream::trunc);
-        // out.close();
+        if (cmdOptionExists(argv, argv + argc, "--pairs"))
+        {
+            output_file_pairs.append("_pairs");
+            out.open(output_file_pairs, ofstream::out | ofstream::trunc);
+            out.close();
+        }
     }
+ 
 
     nav_graph graph;
     graph.load(string(argv[1]));
@@ -52,7 +57,7 @@ int main(int argc, char **argv)
 
     std::ifstream ifs_SO(string(argv[1]) + ".SO", std::ifstream::in);
     std::ifstream ifs_P(string(argv[1]) + ".P", std::ifstream::in);
-    std::ifstream ifs_q(argv[2], std::ifstream::in); 
+    std::ifstream ifs_q(argv[2], std::ifstream::in);
 
     std::unordered_map<string, uint64_t> map_SO;
     std::unordered_map<string, uint64_t> map_P;
@@ -95,9 +100,9 @@ int main(int argc, char **argv)
     duration<double> time_span;
 
     uint64_t n_predicates, n_operators;
-    bool is_negated_pred, is_a_path, is_or, is_const_to_var;
+    // bool is_negated_pred, is_a_path, is_or, is_const_to_var;
     std::string query_type;
-    uint64_t first_pred_id, last_pred_id;
+    // uint64_t first_pred_id, last_pred_id;
 
     do
     {
@@ -114,11 +119,11 @@ int main(int argc, char **argv)
         q++;
 
         n_predicates = 0;
-        is_negated_pred = false;
+        // is_negated_pred = false;
         n_operators = 0;
-        is_a_path = true;
-        is_or = true;
-        is_const_to_var = false;
+        // is_a_path = true;
+        // is_or = true;
+        // is_const_to_var = false;
 
         if (line.at(0) == '?')
         {
@@ -165,7 +170,7 @@ int main(int argc, char **argv)
             if (map_SO.find(s_aux) != map_SO.end())
             {
                 s_id = map_SO[s_aux];
-             }
+            }
             else
                 skip_flag = true;
 
@@ -191,7 +196,7 @@ int main(int argc, char **argv)
                 if (map_SO.find(s_aux_2) != map_SO.end())
                 {
                     o_id = map_SO[s_aux_2];
-                     i = 0;
+                    i = 0;
                     while (i < s_aux_2.size() + 1)
                     {
                         line.pop_back();
@@ -226,7 +231,7 @@ int main(int argc, char **argv)
                         if (s_aux_2[1] == '%')
                         {
                             s_aux_3 = "<" + s_aux_2.substr(2, s_aux_2.size() - 1);
-                            is_negated_pred = true;
+                            // is_negated_pred = true;
                         }
                         else
                         {
@@ -236,12 +241,12 @@ int main(int argc, char **argv)
                         if (map_P.find(s_aux_3) != map_P.end())
                         {
                             query += s_aux_2;
-                            last_pred_id = pred_map[s_aux_3] = map_P[s_aux_3];
+                            // last_pred_id = pred_map[s_aux_3] = map_P[s_aux_3];
                             // TODO: check preds no usados, ctdd de elementos en pred_map debe ser igual al m del automata
 
                             n_predicates++;
-                            if (n_predicates == 1)
-                                first_pred_id = pred_map[s_aux_3];
+                            // if (n_predicates == 1)
+                                // first_pred_id = pred_map[s_aux_3];
                         }
                         else
                         {
@@ -262,9 +267,9 @@ int main(int argc, char **argv)
                                 query += s_aux.at(i);
                                 if (s_aux.at(i) != '(' and s_aux.at(i) != ')')
                                     query_type += s_aux.at(i);
-                                is_a_path = false;
-                                if (s_aux.at(i) != '|')
-                                    is_or = false;
+                                // is_a_path = false;
+                                // if (s_aux.at(i) != '|')
+                                    // is_or = false;
                             }
                         }
                         else if (s_aux.at(i) == '/')
@@ -317,12 +322,15 @@ int main(int argc, char **argv)
                     out.close();
 
                     // write times + number of results + pairs obtained
-                    // out.open(output_file_pairs, std::ios::app);
-                    // out << q << ": " << line << endl;
-                    // out << query_output.size() << "," << (uint64_t)(total_time * 100000ULL) << endl;
-                    // for (pair<uint64_t, uint64_t> pair : query_output)
-                    //     out << pair.first << "-" << pair.second << endl;
-                    // out.close();
+                    if (cmdOptionExists(argv, argv + argc, "--pairs"))
+                    {
+                        out.open(output_file_pairs, std::ios::app);
+                        out << q << ": " << line << endl;
+                        out << query_output.size() << "," << (uint64_t)(total_time * 100000ULL) << endl;
+                        for (pair<uint64_t, uint64_t> pair : query_output)
+                            out << pair.first << "-" << pair.second << endl;
+                        out.close();
+                    }
                 }
             }
             else

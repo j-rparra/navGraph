@@ -15,11 +15,19 @@ using namespace std::chrono;
 using timer = chrono::high_resolution_clock;
 int main(int argc, char **argv)
 {
+
     bool verbose = true;
- 
+
+    // handle -o
+    char *output_file = getCmdOption(argv, argv + argc, "-o");
+    ofstream out;
+    if (output_file)
+    {
+        out.open(output_file, ofstream::out | ofstream::trunc);
+        out.close();
+    }
 
     std::ifstream ifs(argv[1]);
-
 
     if (verbose)
         cout << "\n====>Reading data in " << argv[1] << endl;
@@ -27,7 +35,7 @@ int main(int argc, char **argv)
 
     uint64_t s, p, o;
     vector<spo_triple> E;
-    uint64_t max_S = 0, max_P = 0, max_O = 0; 
+    uint64_t max_S = 0, max_P = 0, max_O = 0;
     do
     {
         ifs >> s >> p >> o;
@@ -36,7 +44,7 @@ int main(int argc, char **argv)
         if (p > max_P)
             max_P = p;
         if (o > max_O)
-            max_O = o; 
+            max_O = o;
         E.emplace_back(spo_triple(s, p, o));
     } while (!ifs.eof());
 
@@ -68,4 +76,16 @@ int main(int argc, char **argv)
     cout << "\n====>Saving the index" << endl;
     NG.save(string(argv[1]));
     cout << "  > index saved" << endl;
+
+    if (output_file)
+    {
+        out.open(output_file, std::ios::app);
+        out << "  > number of triples: " << n << endl;
+        out << "  > max subject/object: " << max_S << "/" << max_O << endl;
+        out << "  > number of predicates: " << max_P << endl;
+        out << "  > " << (float)NG.size() / n << " bytes per triple" << endl;
+        out << "  > TIME USED: " << duration_cast<seconds>(stop - start).count() << " seconds." << endl;
+        out << "  > MEMORY PEAK: " << memory_monitor::peak() << " bytes." << endl;
+        out.close();
+    }
 }
