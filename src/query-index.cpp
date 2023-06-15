@@ -1,5 +1,8 @@
-//./query-index /home/bob/pyProjects/data/1k.dat  /home/bob/pyProjects/data/paths.tsv -o /home/bob/pyProjects/data/navGraphOutput
+//./query-index /home/bob/pyProjects/data/100k.dat  /home/bob/pyProjects/data/paths -o /home/bob/pyProjects/data/navGraphOutput
+//./query-index /home/bob/pyProjects/data/metro/metro.dat  /home/bob/pyProjects/data/metro/paths -o /home/bob/pyProjects/data/metro/navGraphOutput
+
 //./build-index /home/bob/pyProjects/data/1k.dat
+//./build-index /home/bob/pyProjects/data/metro/metro.dat
 
 #include <iostream>
 #include <fstream>
@@ -31,7 +34,12 @@ int main(int argc, char **argv)
 
     // handle -o
     char *output_file = getCmdOption(argv, argv + argc, "-o");
-    string output_file_pairs(output_file);
+    string output_file_pairs;
+     if (cmdOptionExists(argv, argv + argc, "--pairs"))
+        {
+            output_file_pairs = (string) output_file;
+        }
+    
     ofstream out;
     if (output_file)
     {
@@ -101,7 +109,7 @@ int main(int argc, char **argv)
 
     uint64_t n_predicates, n_operators;
     // bool is_negated_pred, is_a_path, is_or, is_const_to_var;
-    std::string query_type;
+    // std::string query_type;
     // uint64_t first_pred_id, last_pred_id;
 
     do
@@ -118,9 +126,9 @@ int main(int argc, char **argv)
         stringstream X(line);
         q++;
 
-        n_predicates = 0;
+        // n_predicates = 0;
         // is_negated_pred = false;
-        n_operators = 0;
+        // n_operators = 0;
         // is_a_path = true;
         // is_or = true;
         // is_const_to_var = false;
@@ -242,11 +250,12 @@ int main(int argc, char **argv)
                         {
                             query += s_aux_2;
                             // last_pred_id = pred_map[s_aux_3] = map_P[s_aux_3];
+                            pred_map[s_aux_3] = map_P[s_aux_3];
                             // TODO: check preds no usados, ctdd de elementos en pred_map debe ser igual al m del automata
 
                             n_predicates++;
                             // if (n_predicates == 1)
-                                // first_pred_id = pred_map[s_aux_3];
+                            //     first_pred_id = pred_map[s_aux_3];
                         }
                         else
                         {
@@ -265,11 +274,11 @@ int main(int argc, char **argv)
                             else
                             {
                                 query += s_aux.at(i);
-                                if (s_aux.at(i) != '(' and s_aux.at(i) != ')')
-                                    query_type += s_aux.at(i);
+                                // if (s_aux.at(i) != '(' and s_aux.at(i) != ')')
+                                //     query_type += s_aux.at(i);
                                 // is_a_path = false;
                                 // if (s_aux.at(i) != '|')
-                                    // is_or = false;
+                                //     is_or = false;
                             }
                         }
                         else if (s_aux.at(i) == '/')
