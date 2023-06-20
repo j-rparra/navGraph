@@ -555,7 +555,7 @@ public:
             {
                 time_span = duration_cast<microseconds>(high_resolution_clock::now() - query_start);
                 if (time_span.count() > TIME_OUT)
-                    return;
+                    return false;
             }
 
             induction_data ist_top = ist_container.top();
