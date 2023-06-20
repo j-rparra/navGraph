@@ -426,7 +426,7 @@ public:
         {
             for (uint64_t obj = 1; obj <= max(max_O, max_P); ++obj)
                 output.emplace_back(obj, obj);
-            if (output.size() >= BOUND)
+            if (BOUND && output.size() >= BOUND)
                 return;
         }
 
@@ -438,8 +438,11 @@ public:
         std::unordered_map<word_t, std::vector<uint64_t>> Q;
         std::unordered_map<uint64_t, word_t> seen;
 
-        for (uint64_t i = 0; i < objects_var_to_var.size() and output.size() < BOUND; i++)
+        for (uint64_t i = 0; i < objects_var_to_var.size(); i++)
         {
+            if (BOUND && output.size() >= BOUND)
+                return;
+            
             // check timeout
             if (TIME_OUT)
             {
@@ -540,9 +543,9 @@ public:
         std::stack<induction_data> ist_container; // data induccion:  sujetos obtenidos + D
         current_D = (word_t)A.getFinalStates();
 
-        if (!is_var_to_var) // solutions (object,object) are already added if the call is from the var_to_var case
+        if (!is_var_to_var){ // solutions (object,object) are already added if the call is from the var_to_var case
             if (A.atFinal(current_D, BWD))
-                solutions.emplace_back(initial_object, initial_object);
+                solutions.emplace_back(initial_object, initial_object);}
 
         std::vector<uint64_t> initial_object_vec;
         initial_object_vec.emplace_back(initial_object);
@@ -622,7 +625,7 @@ public:
                                         for (uint64_t sub : subjects_valid)
                                             solutions.emplace_back(sub, initial_object);
 
-                                    if (solutions.size() >= BOUND)
+                                    if (BOUND && solutions.size() >= BOUND)
                                         return false;
                                 }
                                 // cout << ">PART 5: actualizar container" << endl;

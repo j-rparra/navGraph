@@ -1,8 +1,10 @@
 //./query-index /home/bob/pyProjects/data/100k.dat  /home/bob/pyProjects/data/paths -o /home/bob/pyProjects/data/navGraphOutput
 //./query-index /home/bob/pyProjects/data/metro/metro.dat  /home/bob/pyProjects/data/metro/paths -o /home/bob/pyProjects/data/metro/navGraphOutput
 
+//./query-index ~/pyProjects/data/grafo/grafo.dat  ~/pyProjects/data/grafo/paths -o ~/pyProjects/data/grafo/NAV_TEST
+
 //./build-index /home/bob/pyProjects/data/1k.dat
-//./build-index /home/bob/pyProjects/data/metro/metro.dat
+//./build-index /home/bob/pyProjects/data/grafo/grafo.dat
 
 #include <iostream>
 #include <fstream>
@@ -30,7 +32,7 @@ int main(int argc, char **argv)
     ofstream out;
     char *output_file = getCmdOption(argv, argv + argc, "-o");
     string output_file_pairs;
-    if (OUTPUT_PAIRS)
+    if (output_file && OUTPUT_PAIRS)
     {
         output_file_pairs = (string)output_file;
         output_file_pairs.append("_pairs");

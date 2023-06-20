@@ -12,7 +12,7 @@ using namespace sdsl;
 using namespace std;
 
 
-uint64_t BOUND = 100000; // bound for the number of results
+uint64_t BOUND = 100000; // bound for the number of results, 0 for no bound
 uint64_t TIME_OUT = 0;     // timeout for queries in seconds, 0 for no timeout
 bool OUTPUT_PAIRS = true; // if true, -o also saves the pairs obtained
 
