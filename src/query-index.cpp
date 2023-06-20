@@ -19,41 +19,29 @@ using timer = std::chrono::high_resolution_clock;
 int main(int argc, char **argv)
 {
 
-    if (argc < 3)
-    {
-        cerr << "  Usage: " << argv[0] << " <ring-index-file> <queries-file>" << endl;
-        exit(1);
-    }
-
-    if (cmdOptionExists(argv, argv + argc, "-h"))
+    if (argc < 3 || cmdOptionExists(argv, argv + argc, "-h"))
     {
         cout << "  Usage: " << argv[0] << " <ring-index-file> <queries-file>" << endl;
         cout << " -o <output-file>:  saves in <output-file>  the time used + the number of pairs obtained for each query" << endl;
-        cout << " --pairs: use with -o to also save the pairs obtained" << endl;
+        exit(1);
     }
 
     // handle -o
+    ofstream out;
     char *output_file = getCmdOption(argv, argv + argc, "-o");
     string output_file_pairs;
-     if (cmdOptionExists(argv, argv + argc, "--pairs"))
-        {
-            output_file_pairs = (string) output_file;
-        }
-    
-    ofstream out;
+    if (OUTPUT_PAIRS)
+    {
+        output_file_pairs = (string)output_file;
+        output_file_pairs.append("_pairs");
+        out.open(output_file_pairs, ofstream::out | ofstream::trunc);
+        out.close();
+    }
     if (output_file)
     {
         out.open(output_file, ofstream::out | ofstream::trunc);
         out.close();
-
-        if (cmdOptionExists(argv, argv + argc, "--pairs"))
-        {
-            output_file_pairs.append("_pairs");
-            out.open(output_file_pairs, ofstream::out | ofstream::trunc);
-            out.close();
-        }
     }
- 
 
     nav_graph graph;
     graph.load(string(argv[1]));
@@ -103,9 +91,8 @@ int main(int argc, char **argv)
     std::vector<std::pair<uint64_t, uint64_t>> query_output;
     std::vector<word_t> B_array(4 * graph.n, 0);
 
-    high_resolution_clock::time_point start, stop;
-    double total_time = 0.0;
-    duration<double> time_span;
+    high_resolution_clock::time_point stop; //start, stop;
+    double total_time = 0.0; 
 
     uint64_t n_predicates, n_operators;
     // bool is_negated_pred, is_a_path, is_or, is_const_to_var;
@@ -292,7 +279,7 @@ int main(int argc, char **argv)
 
             if (!skip_flag)
             {
-                start = high_resolution_clock::now();
+                query_start = high_resolution_clock::now();
                 if (!flag_s and !flag_o)
                 {
                     // cout << " ?x ?y " << endl;
@@ -314,7 +301,7 @@ int main(int argc, char **argv)
                     }
                 }
                 stop = high_resolution_clock::now();
-                time_span = duration_cast<microseconds>(stop - start);
+                time_span = duration_cast<microseconds>(stop - query_start);
                 total_time = time_span.count();
 
                 // TODO quitar duplicados de mejor manera
@@ -331,11 +318,11 @@ int main(int argc, char **argv)
                     out.close();
 
                     // write times + number of results + pairs obtained
-                    if (cmdOptionExists(argv, argv + argc, "--pairs"))
+                    if (OUTPUT_PAIRS)
                     {
                         out.open(output_file_pairs, std::ios::app);
-                        out << q << ": " << line << endl;
-                        out << query_output.size() << "," << (uint64_t)(total_time * 100000ULL) << endl;
+                        out <<endl << q << ": " << line << endl;
+                        // out << query_output.size() << "," << (uint64_t)(total_time * 1000000000ULL) << endl;
                         for (pair<uint64_t, uint64_t> pair : query_output)
                             out << pair.first << "-" << pair.second << endl;
                         out.close();

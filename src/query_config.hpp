@@ -1,12 +1,10 @@
-#ifndef QUERY_CONFIG
-#define QUERY_CONFIG
+#ifndef CONFIG_Q
+#define CONFIG_Q
 
-// type for array D (see the paper)
-typedef uint16_t word_t;
+#include <chrono>  
+using namespace std::chrono;
 
-// timeout for queries, in seconds
-#define TIME_OUT 600
-
+high_resolution_clock::time_point query_start;
+duration<double> time_span;
 
 #endif
-

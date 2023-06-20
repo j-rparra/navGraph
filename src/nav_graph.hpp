@@ -10,8 +10,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sdsl/init_array.hpp>
+#include <algorithm>
 
 #include "Config.hpp"
+#include "query_config.hpp"
 #include "utils.hpp"
 #include "nav_tree.hpp"
 #include "nav_bv.hpp"
@@ -26,12 +28,6 @@ typedef struct
     vector<uint64_t> ojects;
     word_t current_D;
 } induction_data;
-
-typedef struct
-{
-    uint64_t ojects;
-    word_t current_D;
-} induction_data2;
 
 class nav_graph
 {
@@ -411,6 +407,8 @@ public:
                             std::vector<std::pair<uint64_t, uint64_t>> &output)
     {
 
+        auto start = chrono::steady_clock ::now();
+
         // automata para query no reversa, se usa para obtener los objetos
         std::string query;
         int64_t i = 0;
@@ -423,6 +421,15 @@ public:
         query2 = parse_reverse(rpq, i2, predicates_map, max_P);
         RpqAutomata A2(query2, predicates_map);
 
+        // PASO 0: ver si se acepta solucion "todo objeto con si mismo"
+        if (A.atFinal((word_t)1, FWD))
+        {
+            for (uint64_t obj = 1; obj <= max(max_O, max_P); ++obj)
+                output.emplace_back(obj, obj);
+            if (output.size() >= BOUND)
+                return;
+        }
+
         std::vector<uint64_t> objects_var_to_var;
 
         // PASO 1; obtener objetos candidatos
@@ -431,12 +438,19 @@ public:
         std::unordered_map<word_t, std::vector<uint64_t>> Q;
         std::unordered_map<uint64_t, word_t> seen;
 
-        for (uint64_t i = 0; i < objects_var_to_var.size() and output.size() < bound; i++)
+        for (uint64_t i = 0; i < objects_var_to_var.size() and output.size() < BOUND; i++)
         {
+            // check timeout
+            if (TIME_OUT)
+            {
+                time_span = duration_cast<microseconds>(high_resolution_clock::now() - query_start);
+                if (time_span.count() > TIME_OUT)
+                    return;
+            }
             // Q.clear();
             seen.clear(); // a priori tiene que estar descomentado pero
             // si se guarda que ''Ds'' son exitosos y a que sijeto final corresponden se podria ahorrar(?)
-            _new_rpq_one_const(A2, Q, seen, predicates_map, objects_var_to_var[i], output, true);
+            _new_rpq_one_const(A2, Q, seen, predicates_map, objects_var_to_var[i], output, true, true);
         }
     }
 
@@ -459,10 +473,18 @@ public:
         }
 
         // PASO 2: obtener los ?x con sources o targets TODO optimizable: se peude invertir o no query segun ctdd preds negados para
-        //reemplazar algunos targets por sources o al reves
+        // reemplazar algunos targets por sources o al reves
         std::vector<uint64_t> initial_objects;
         for (uint64_t ini_pred : initial_predicates)
         {
+            // check timeout
+            if (TIME_OUT)
+            {
+                time_span = duration_cast<microseconds>(high_resolution_clock::now() - query_start);
+                if (time_span.count() > TIME_OUT)
+                    return;
+            }
+
             if (ini_pred <= max_P)
                 initial_objects = targets_l(ini_pred);
             else
@@ -472,16 +494,15 @@ public:
         }
     };
 
- 
     /*Casos con una constante*/
 
     // nuevo caso: el primer paso de la iteracion sea sobre objetos en vez de preds
     void new_rpq_one_const(const std::string &rpq,
-                           unordered_map<std::string, uint64_t> &predicates_map, 
+                           unordered_map<std::string, uint64_t> &predicates_map,
                            uint64_t initial_object,
                            std::vector<std::pair<uint64_t, uint64_t>> &output, bool is_const_to_var)
     {
-         
+
         std::string query, str_aux;
 
         if (is_const_to_var)
@@ -496,32 +517,32 @@ public:
         }
         RpqAutomata A(query, predicates_map);
 
-        std::unordered_map<word_t, std::vector<uint64_t>> Q; // Q[word_t D] = lista con los predicados del automata que llegan a mis nodos activos. TODO: cambiar vector por bitmap 
-        std::unordered_map<uint64_t, word_t> seen;            
+        std::unordered_map<word_t, std::vector<uint64_t>> Q; // Q[word_t D] = lista con los predicados del automata que llegan a mis nodos activos. TODO: cambiar vector por bitmap
+        std::unordered_map<uint64_t, word_t> seen;
 
         // std::chrono::high_resolution_clock::time_point start;
         // double total_time = 0.0;
         // std::chrono::duration<double> time_span;
         // start = std::chrono::high_resolution_clock::now();
-        _new_rpq_one_const(A, Q, seen, predicates_map, initial_object, output, is_const_to_var);
+        _new_rpq_one_const(A, Q, seen, predicates_map, initial_object, output, is_const_to_var, false);
     };
 
-    
     bool _new_rpq_one_const(
         RpqAutomata &A, std::unordered_map<word_t, std::vector<uint64_t>> &Q,
         std::unordered_map<uint64_t, word_t> &seen,
         std::unordered_map<std::string, uint64_t> &predicates_map,
         uint64_t initial_object,
         std::vector<std::pair<uint64_t, uint64_t>> &solutions,
-        bool is_const_to_var)
+        bool is_const_to_var, bool is_var_to_var)
     {
 
         word_t current_D, filtered_D;             // palabra de maquina D, con los estados activos
         std::stack<induction_data> ist_container; // data induccion:  sujetos obtenidos + D
         current_D = (word_t)A.getFinalStates();
 
-        if (A.atFinal(current_D, BWD))
-            solutions.emplace_back(initial_object, initial_object); 
+        if (!is_var_to_var) // solutions (object,object) are already added if the call is from the var_to_var case
+            if (A.atFinal(current_D, BWD))
+                solutions.emplace_back(initial_object, initial_object);
 
         std::vector<uint64_t> initial_object_vec;
         initial_object_vec.emplace_back(initial_object);
@@ -529,13 +550,21 @@ public:
 
         while (!ist_container.empty())
         {
+            // check timeout
+            if (TIME_OUT)
+            {
+                time_span = duration_cast<microseconds>(high_resolution_clock::now() - query_start);
+                if (time_span.count() > TIME_OUT)
+                    return;
+            }
+
             induction_data ist_top = ist_container.top();
             ist_container.pop();
 
             current_D = ist_top.current_D;
             initial_object_vec = ist_top.ojects;
 
-            // cout << "  >PART1: PARA CADA OBJETO EN OBJETOS DE INDUCCION..." << endl;  
+            // cout << "  >PART1: PARA CADA OBJETO EN OBJETOS DE INDUCCION..." << endl;
             for (uint64_t obj : ist_top.ojects)
             {
                 filtered_D = ~seen[obj] & current_D; // dejar los nodos del automata no vistos aun
@@ -544,7 +573,7 @@ public:
                 if (filtered_D) // quedan ''1s'' del automata por ver, else pasa al siguiente objeto
                 {
                     seen[obj] = seen[obj] | current_D;
-                    
+
                     // TODO: SACAR DEL FOR ALGUNOS PASOS
                     // PART2: CALCULAR Q SI NO ESTA PARA ESE D, que preds llegan a mis estados activos?
                     if (Q.count(filtered_D) == 0) // TODO: es count lo mas rapido?
@@ -563,9 +592,9 @@ public:
 
                     // PART3: FOR EACH PREDICATE THAT REACHES FILTERED_D
                     for (uint64_t pred : Q[filtered_D])
-                    {   
+                    {
                         word_t new_D = (word_t)A.next(filtered_D, pred, BWD);
-                        
+
                         std::vector<uint64_t> subjects_valid;
                         if (new_D != 0)
                         {
@@ -578,29 +607,27 @@ public:
                             else
                             {
                                 // cout << "pred negado" << endl;
-                                subjects_valid = rneigh_l_all(obj, pred - max_P); 
+                                subjects_valid = rneigh_l_all(obj, pred - max_P);
                             }
 
-                        
                             if (!subjects_valid.empty())
                             {
                                 if (A.atFinal(new_D, BWD))
                                 {
                                     if (is_const_to_var)
                                         for (uint64_t sub : subjects_valid)
-                                            solutions.emplace_back(initial_object, sub); 
-                                                                                         // v1.insert( v1.end(), v2.begin(), v2.end() );
+                                            solutions.emplace_back(initial_object, sub);
+                                    // v1.insert( v1.end(), v2.begin(), v2.end() );
                                     else
                                         for (uint64_t sub : subjects_valid)
                                             solutions.emplace_back(sub, initial_object);
 
-                                    if (solutions.size() >= bound)
+                                    if (solutions.size() >= BOUND)
                                         return false;
                                 }
                                 // cout << ">PART 5: actualizar container" << endl;
                                 ist_container.push(induction_data{subjects_valid, new_D});
                             }
-                            
                         }
                     }
                 }
@@ -608,7 +635,5 @@ public:
         }
         return false;
     };
-
-  
 };
 #endif
