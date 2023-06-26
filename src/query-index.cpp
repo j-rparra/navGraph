@@ -3,7 +3,8 @@
 
 //./query-index ~/pyProjects/data/grafo/grafo.dat  ~/pyProjects/data/grafo/paths -o ~/pyProjects/data/grafo/NAV_TEST
 
-//./build-index /home/bob/pyProjects/data/1k.dat
+//./query-index ~/pyProjects/data/30k.dat  ~/pyProjects/data/paths -o ~/pyProjects/data/grafo/NAVOLD30k
+//~/cppProjects/clean/NavarroGraph/build/build-index /home/bob/pyProjects/data/30k.dat
 //./build-index /home/bob/pyProjects/data/grafo/grafo.dat
 
 #include <iostream>
@@ -306,9 +307,6 @@ int main(int argc, char **argv)
                 time_span = duration_cast<microseconds>(stop - query_start);
                 total_time = time_span.count();
 
-                // TODO quitar duplicados de mejor manera
-                sort(query_output.begin(), query_output.end());
-                query_output.erase(unique(query_output.begin(), query_output.end()), query_output.end());
 
                 cout << q << ";" << query_output.size() << ";" << (uint64_t)(total_time * 1000000000ULL) << endl;
 

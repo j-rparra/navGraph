@@ -21,6 +21,8 @@
 #include "RpqTree.hpp"
 #include "parse_query.cpp"
 
+//TODO revisar con sort que no hayan duplicados en output (especialmente caso dos var)
+
 using namespace std;
 
 typedef struct
@@ -179,7 +181,7 @@ public:
     }
 
     pair<uint64_t, uint64_t> neigh(uint64_t v, uint64_t j)
-    { // assuming j ≤ outdegree(G, v)
+    { // assuming j <= outdegree(G, v)
         uint64_t p = B.select(v) - v + j;
         uint64_t l = L.access(p);
         uint64_t q = B_L.select(l) - l;
@@ -198,7 +200,8 @@ public:
     std::vector<pair<uint64_t, uint64_t>> neigh_all(uint64_t v)
     {
         std::vector<pair<uint64_t, uint64_t>> neighboors;
-        for (uint64_t i = 1; i <= outdegree(v); i++)
+        uint64_t outd = outdegree(v);
+        for (uint64_t i = 1; i <= outd; i++)
             neighboors.emplace_back(neigh(v, i));
         return neighboors;
     }
@@ -206,7 +209,8 @@ public:
     std::vector<pair<uint64_t, uint64_t>> rneigh_all(uint64_t v)
     {
         std::vector<pair<uint64_t, uint64_t>> rneighboors;
-        for (uint64_t i = 1; i <= indegree(v); i++)
+        int64_t ind = indegree(v);
+        for (uint64_t i = 1; i <= ind; i++) //TODO sacar ind del loop
             rneighboors.emplace_back(rneigh(v, i));
         return rneighboors;
     }
@@ -229,6 +233,8 @@ public:
         uint64_t b = B.select(v);
         uint64_t p1 = b - v;
         uint64_t p2 = B.succ(b + 1) - (v + 1);
+        if (p2 <= p1)
+            return 0;
         return L.my_rank(p2, l) - L.my_rank(p1, l);
     }
 
@@ -237,6 +243,8 @@ public:
         uint64_t b = B_L.select(l);
         uint64_t r1 = b - l;
         uint64_t r2 = B_L.succ(b + 1) - (l + 1);
+        if (r2 <= r1)
+            return 0;
         return N.my_rank(r2, v) - N.my_rank(r1, v);
     }
 
@@ -267,11 +275,13 @@ public:
     std::vector<uint64_t> neigh_l_all(uint64_t v, uint64_t l)
     {
         std::vector<uint64_t> neighboors;
+        // cout << "calculando neighs para obj, pred" << v << " - " << l << endl;
 
         uint64_t p = B.select(v) - v;
         uint64_t r = B_L.select(l) - l;
         uint64_t q = L.my_rank(p, l);
-        for (uint64_t i = 1; i <= outdegree_l(v, l); i++)
+        uint64_t outdegree = outdegree_l(v, l);
+        for (uint64_t i = 1; i <= outdegree; i++)
             neighboors.emplace_back(N.access(r + q + i));
         return neighboors;
     }
@@ -281,7 +291,8 @@ public:
         std::vector<uint64_t> rneighboors;
         uint64_t t, s;
         uint64_t r = B_L.select(l) - l;
-        for (uint64_t i = 1; i <= indegree_l(v, l); i++)
+        uint64_t ind = indegree_l(v, l);
+        for (uint64_t i = 1; i <= ind; i++)
         {
             t = N.select(N.my_rank(r, v) + i, v);
             s = L.select(t - r, l);
@@ -401,7 +412,7 @@ public:
 
     /*FUNCIONES RPQ*/
 
-    // nuevo caso ?x rpq ?y, los objetos son los targets del nodo inicial
+    // caso ?x rpq ?y
     void new_rpq_var_to_var(const std::string &rpq,
                             unordered_map<std::string, uint64_t> &predicates_map, // ToDo: esto debería ser una variable miembro de la clase
                             std::vector<std::pair<uint64_t, uint64_t>> &output)
@@ -409,51 +420,69 @@ public:
 
         auto start = chrono::steady_clock ::now();
 
-        // automata para query no reversa, se usa para obtener los objetos
+        // automata para query no reversa, se usa para obtener los sujetos
         std::string query;
         int64_t i = 0;
         query = parse(rpq, i, predicates_map, max_P);
         RpqAutomata A(query, predicates_map);
 
-        // automata para query reversa,  se usa una vez se tienen los objetos
+        // automata para query reversa,  se usa una vez se tienen los sujetos
         std::string query2;
         int64_t i2 = rpq.size() - 1;
         query2 = parse_reverse(rpq, i2, predicates_map, max_P);
         RpqAutomata A2(query2, predicates_map);
 
         // PASO 0: ver si se acepta solucion "todo objeto con si mismo"
+        bool empty_path_is_solution = false;
         if (A.atFinal((word_t)1, FWD))
         {
-            for (uint64_t obj = 1; obj <= max(max_O, max_P); ++obj)
+            cout << "empty path is solution (case ?X?Y)" << endl;
+            empty_path_is_solution = true;
+            for (uint64_t obj = 1; obj <= max(max_O, max_S); ++obj)
                 output.emplace_back(obj, obj);
             if (BOUND && output.size() >= BOUND)
                 return;
         }
 
         std::vector<uint64_t> objects_var_to_var;
+        std::unordered_map<uint64_t, bool> seen_obj; // TODO optimizar, var para no repetir en paso 2 los objs de pbjects_var_to_var
 
         // PASO 1; obtener objetos candidatos
         new_rpq_var_to_var_get_o(A, predicates_map, objects_var_to_var);
 
+        // for (auto obj : objects_var_to_var)
+            // cout << "obj oarte 1;" << obj << endl;
+
+
+   
         std::unordered_map<word_t, std::vector<uint64_t>> Q;
         std::unordered_map<uint64_t, word_t> seen;
 
         for (uint64_t i = 0; i < objects_var_to_var.size(); i++)
         {
-            if (BOUND && output.size() >= BOUND)
-                return;
-            
-            // check timeout
-            if (TIME_OUT)
+            // cout << "---" << objects_var_to_var[i] << endl;
+
+            if (!seen_obj[objects_var_to_var[i]])
             {
-                time_span = duration_cast<microseconds>(high_resolution_clock::now() - query_start);
-                if (time_span.count() > TIME_OUT)
+                seen_obj[objects_var_to_var[i]] = true;
+
+                // Q.clear();
+                if (empty_path_is_solution)
+                    seen[objects_var_to_var[i]] = (1 << 15); //objeto ya se agrego como respuesta
+                _new_rpq_one_const(A2, Q, seen, predicates_map, objects_var_to_var[i], output, true);
+                seen.clear(); // a priori tiene que estar descomentado pero
+                              // si se guarda que ''Ds'' son exitosos y a que sijeto final corresponden se podria ahorrar(?)
+
+                if (BOUND && output.size() >= BOUND)
                     return;
+                // check timeout
+                if (TIME_OUT)
+                {
+                    time_span = duration_cast<microseconds>(high_resolution_clock::now() - query_start);
+                    if (time_span.count() > TIME_OUT)
+                        return;
+                }
             }
-            // Q.clear();
-            seen.clear(); // a priori tiene que estar descomentado pero
-            // si se guarda que ''Ds'' son exitosos y a que sijeto final corresponden se podria ahorrar(?)
-            _new_rpq_one_const(A2, Q, seen, predicates_map, objects_var_to_var[i], output, true, true);
         }
     }
 
@@ -527,7 +556,7 @@ public:
         // double total_time = 0.0;
         // std::chrono::duration<double> time_span;
         // start = std::chrono::high_resolution_clock::now();
-        _new_rpq_one_const(A, Q, seen, predicates_map, initial_object, output, is_const_to_var, false);
+        _new_rpq_one_const(A, Q, seen, predicates_map, initial_object, output, is_const_to_var);
     };
 
     bool _new_rpq_one_const(
@@ -536,16 +565,19 @@ public:
         std::unordered_map<std::string, uint64_t> &predicates_map,
         uint64_t initial_object,
         std::vector<std::pair<uint64_t, uint64_t>> &solutions,
-        bool is_const_to_var, bool is_var_to_var)
+        bool is_const_to_var)
     {
 
         word_t current_D, filtered_D;             // palabra de maquina D, con los estados activos
         std::stack<induction_data> ist_container; // data induccion:  sujetos obtenidos + D
         current_D = (word_t)A.getFinalStates();
 
-        if (!is_var_to_var){ // solutions (object,object) are already added if the call is from the var_to_var case
-            if (A.atFinal(current_D, BWD))
-                solutions.emplace_back(initial_object, initial_object);}
+        // second condition should be false iff  the call is from the var_to_var case
+        if (A.atFinal(current_D, BWD) && !(seen[initial_object] & (1 << 15)))
+        {
+            solutions.emplace_back(initial_object, initial_object);
+            seen[initial_object] = seen[initial_object] | (1 << 15);
+        } 
 
         std::vector<uint64_t> initial_object_vec;
         initial_object_vec.emplace_back(initial_object);
@@ -571,8 +603,8 @@ public:
             for (uint64_t obj : ist_top.ojects)
             {
                 filtered_D = ~seen[obj] & current_D; // dejar los nodos del automata no vistos aun
-                // cout << "filtered_D es: " << std::bitset<16>(filtered_D) << endl;
-
+                // filtered_D = filtered_D & ~(1 << 15); // no considerar el bit ''obj ya agregado a respuesta?''
+                
                 if (filtered_D) // quedan ''1s'' del automata por ver, else pasa al siguiente objeto
                 {
                     seen[obj] = seen[obj] | current_D;
@@ -617,13 +649,18 @@ public:
                             {
                                 if (A.atFinal(new_D, BWD))
                                 {
-                                    if (is_const_to_var)
-                                        for (uint64_t sub : subjects_valid)
-                                            solutions.emplace_back(initial_object, sub);
+                                    for (uint64_t sub : subjects_valid)
+                                    {
+                                        if (~seen[sub] & (1 << 15))
+                                        {
+                                            seen[sub] = seen[sub] | (1 << 15);
+                                            if (is_const_to_var)
+                                                solutions.emplace_back(initial_object, sub);
+                                            else
+                                                solutions.emplace_back(sub, initial_object);
+                                        }
+                                    }
                                     // v1.insert( v1.end(), v2.begin(), v2.end() );
-                                    else
-                                        for (uint64_t sub : subjects_valid)
-                                            solutions.emplace_back(sub, initial_object);
 
                                     if (BOUND && solutions.size() >= BOUND)
                                         return false;
