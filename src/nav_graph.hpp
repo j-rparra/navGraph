@@ -436,7 +436,6 @@ public:
         bool empty_path_is_solution = false;
         if (A.atFinal((word_t)1, FWD))
         {
-            cout << "empty path is solution (case ?X?Y)" << endl;
             empty_path_is_solution = true;
             for (uint64_t obj = 1; obj <= max(max_O, max_S); ++obj)
                 output.emplace_back(obj, obj);
