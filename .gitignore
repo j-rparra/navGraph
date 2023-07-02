@@ -1,3 +1,12 @@
+data/
+build/
+cmake-build-debug/
+.idea/
+.DS_Store
+/data/
+.vscode/
+src/query-index-split.cpp
+
 ##### Linux
 *~
 
