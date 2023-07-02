@@ -21,8 +21,6 @@
 #include "RpqTree.hpp"
 #include "parse_query.cpp"
 
-//TODO revisar con sort que no hayan duplicados en output (especialmente caso dos var)
-
 using namespace std;
 
 typedef struct
@@ -210,7 +208,7 @@ public:
     {
         std::vector<pair<uint64_t, uint64_t>> rneighboors;
         int64_t ind = indegree(v);
-        for (uint64_t i = 1; i <= ind; i++) //TODO sacar ind del loop
+        for (uint64_t i = 1; i <= ind; i++) 
             rneighboors.emplace_back(rneigh(v, i));
         return rneighboors;
     }
@@ -414,11 +412,9 @@ public:
 
     // caso ?x rpq ?y
     void new_rpq_var_to_var(const std::string &rpq,
-                            unordered_map<std::string, uint64_t> &predicates_map, // ToDo: esto debería ser una variable miembro de la clase
+                            unordered_map<std::string, uint64_t> &predicates_map,
                             std::vector<std::pair<uint64_t, uint64_t>> &output)
     {
-
-        auto start = chrono::steady_clock ::now();
 
         // automata para query no reversa, se usa para obtener los sujetos
         std::string query;
@@ -450,10 +446,8 @@ public:
         new_rpq_var_to_var_get_o(A, predicates_map, objects_var_to_var);
 
         // for (auto obj : objects_var_to_var)
-            // cout << "obj oarte 1;" << obj << endl;
+        // cout << "obj oarte 1;" << obj << endl;
 
-
-   
         std::unordered_map<word_t, std::vector<uint64_t>> Q;
         std::unordered_map<uint64_t, word_t> seen;
 
@@ -467,7 +461,7 @@ public:
 
                 // Q.clear();
                 if (empty_path_is_solution)
-                    seen[objects_var_to_var[i]] = (1 << 15); //objeto ya se agrego como respuesta
+                    seen[objects_var_to_var[i]] = (1 << 15); // objeto ya se agrego como respuesta
                 _new_rpq_one_const(A2, Q, seen, predicates_map, objects_var_to_var[i], output, true);
                 seen.clear(); // a priori tiene que estar descomentado pero
                               // si se guarda que ''Ds'' son exitosos y a que sijeto final corresponden se podria ahorrar(?)
@@ -550,11 +544,7 @@ public:
 
         std::unordered_map<word_t, std::vector<uint64_t>> Q; // Q[word_t D] = lista con los predicados del automata que llegan a mis nodos activos. TODO: cambiar vector por bitmap
         std::unordered_map<uint64_t, word_t> seen;
-
-        // std::chrono::high_resolution_clock::time_point start;
-        // double total_time = 0.0;
-        // std::chrono::duration<double> time_span;
-        // start = std::chrono::high_resolution_clock::now();
+ 
         _new_rpq_one_const(A, Q, seen, predicates_map, initial_object, output, is_const_to_var);
     };
 
@@ -576,7 +566,7 @@ public:
         {
             solutions.emplace_back(initial_object, initial_object);
             seen[initial_object] = seen[initial_object] | (1 << 15);
-        } 
+        }
 
         std::vector<uint64_t> initial_object_vec;
         initial_object_vec.emplace_back(initial_object);
@@ -603,12 +593,11 @@ public:
             {
                 filtered_D = ~seen[obj] & current_D; // dejar los nodos del automata no vistos aun
                 // filtered_D = filtered_D & ~(1 << 15); // no considerar el bit ''obj ya agregado a respuesta?''
-                
+
                 if (filtered_D) // quedan ''1s'' del automata por ver, else pasa al siguiente objeto
                 {
                     seen[obj] = seen[obj] | current_D;
 
-                    // TODO: SACAR DEL FOR ALGUNOS PASOS
                     // PART2: CALCULAR Q SI NO ESTA PARA ESE D, que preds llegan a mis estados activos?
                     if (Q.count(filtered_D) == 0) // TODO: es count lo mas rapido?
                     {

@@ -1,0 +1,2 @@
+/usr/bin/ar qc libnfa.a CMakeFiles/nfa.dir/src/bitmasks.cpp.o CMakeFiles/nfa.dir/src/options.cpp.o CMakeFiles/nfa.dir/src/parser.cpp.o CMakeFiles/nfa.dir/src/regular.cpp.o CMakeFiles/nfa.dir/src/RpqAutomata.cpp.o CMakeFiles/nfa.dir/src/RpqTree.cpp.o
+/usr/bin/ranlib libnfa.a

@@ -1,0 +1,15 @@
+/home/bob/cppProjects/clean/NavarroGraph/build/CMakeFiles/build-index.dir
+/home/bob/cppProjects/clean/NavarroGraph/build/CMakeFiles/query-index.dir
+/home/bob/cppProjects/clean/NavarroGraph/build/CMakeFiles/edit_cache.dir
+/home/bob/cppProjects/clean/NavarroGraph/build/CMakeFiles/rebuild_cache.dir
+/home/bob/cppProjects/clean/NavarroGraph/build/CMakeFiles/list_install_components.dir
+/home/bob/cppProjects/clean/NavarroGraph/build/CMakeFiles/install.dir
+/home/bob/cppProjects/clean/NavarroGraph/build/CMakeFiles/install/local.dir
+/home/bob/cppProjects/clean/NavarroGraph/build/CMakeFiles/install/strip.dir
+/home/bob/cppProjects/clean/NavarroGraph/build/nfa/CMakeFiles/nfa.dir
+/home/bob/cppProjects/clean/NavarroGraph/build/nfa/CMakeFiles/edit_cache.dir
+/home/bob/cppProjects/clean/NavarroGraph/build/nfa/CMakeFiles/rebuild_cache.dir
+/home/bob/cppProjects/clean/NavarroGraph/build/nfa/CMakeFiles/list_install_components.dir
+/home/bob/cppProjects/clean/NavarroGraph/build/nfa/CMakeFiles/install.dir
+/home/bob/cppProjects/clean/NavarroGraph/build/nfa/CMakeFiles/install/local.dir
+/home/bob/cppProjects/clean/NavarroGraph/build/nfa/CMakeFiles/install/strip.dir

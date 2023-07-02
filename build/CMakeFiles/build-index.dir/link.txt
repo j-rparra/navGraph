@@ -1,0 +1,1 @@
+/usr/bin/c++  -fpermissive -std=c++11 -Wall -Wextra  -msse4.2 -O3 -DNDEBUG -msse4.2 -O3 -ffast-math -funroll-loops -fno-omit-frame-pointer -g -rdynamic "CMakeFiles/build-index.dir/src/build-index.cpp.o" -o build-index   -L/home/bob/lib  -Wl,-rpath,/home/bob/lib -lsdsl -ldivsufsort -ldivsufsort64 nfa/libnfa.a 

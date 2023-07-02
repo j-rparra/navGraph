@@ -94,8 +94,8 @@ int main(int argc, char **argv)
     std::vector<std::pair<uint64_t, uint64_t>> query_output;
     std::vector<word_t> B_array(4 * graph.n, 0);
 
-    high_resolution_clock::time_point stop; //start, stop;
-    double total_time = 0.0; 
+    high_resolution_clock::time_point stop; // start, stop;
+    double total_time = 0.0;
 
     uint64_t n_predicates, n_operators;
     // bool is_negated_pred, is_a_path, is_or, is_const_to_var;
@@ -307,8 +307,9 @@ int main(int argc, char **argv)
                 time_span = duration_cast<microseconds>(stop - query_start);
                 total_time = time_span.count();
 
-
                 cout << q << ";" << query_output.size() << ";" << (uint64_t)(total_time * 1000000000ULL) << endl;
+                // for (pair<uint64_t, uint64_t> pair : query_output)
+                //     cout << pair.first << "-" << pair.second << endl;
 
                 if (output_file)
                 {
@@ -321,7 +322,8 @@ int main(int argc, char **argv)
                     if (OUTPUT_PAIRS)
                     {
                         out.open(output_file_pairs, std::ios::app);
-                        out <<endl << q << ": " << line << endl;
+                        out << endl
+                            << q << ": " << line << endl;
                         // out << query_output.size() << "," << (uint64_t)(total_time * 1000000000ULL) << endl;
                         for (pair<uint64_t, uint64_t> pair : query_output)
                             out << pair.first << "-" << pair.second << endl;
