@@ -286,20 +286,20 @@ int main(int argc, char **argv)
                 if (!flag_s and !flag_o)
                 {
                     // cout << " ?x ?y " << endl;
-                    graph.new_rpq_var_to_var(query, pred_map, query_output);
+                    graph.rpq_var_to_var(query, pred_map, query_output);
                 }
                 else
                 {
                     if (flag_s)
                     {
                         // cout << " ?y " << endl;
-                        graph.new_rpq_one_const(query, pred_map, s_id, query_output, true);
+                        graph.rpq_one_const(query, pred_map, s_id, query_output, true);
                         // graph.rpq_one_const(query, pred_map, s_id, query_output, true);
                     }
                     else
                     {
                         // cout << " ?x " << endl;
-                        graph.new_rpq_one_const(query, pred_map, o_id, query_output, false);
+                        graph.rpq_one_const(query, pred_map, o_id, query_output, false);
                         // graph.rpq_one_const(query, pred_map, o_id, query_output, false);
                     }
                 }

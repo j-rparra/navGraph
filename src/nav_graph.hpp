@@ -1,4 +1,3 @@
-
 #ifndef NGRAPH
 #define NGRAPH
 
@@ -35,17 +34,16 @@ class nav_graph
     nav_bv B, B_L;
 
 public:
-    uint64_t max_S, max_P, max_O;
+    uint64_t max_S, max_P, max_O, max_SO;
     uint64_t n;
 
     nav_graph() { ; }
 
-    nav_graph(vector<spo_triple> &E, uint64_t max_s, uint64_t max_o, uint64_t max_p, bool verbose = true)
+    nav_graph(vector<spo_triple> &E, uint64_t max_s, uint64_t max_o, uint64_t max_p)
     {
+        max_S = max_s, max_P = max_p, max_O = max_o;
         uint64_t i, tmp;
         std::fstream fp;
-
-        max_S = max_s, max_P = max_p, max_O = max_o;
         vector<spo_triple>::iterator it, triple_begin = E.begin(), triple_end = E.end();
         n = triple_end - triple_begin;
         if (verbose)
@@ -89,7 +87,7 @@ public:
         util::bit_compress(P_count);
         B_L = nav_bv(P_count, max_P + 1);
 
-        cout << "  > moving vector with triples to disk into L.tmp and N.tmp" << endl;
+        cout << "  > moving vector with triples to files L.tmp and N.tmp" << endl;
         fflush(stdout);
         uint64_t *L_data = new uint64_t[n + 1];
         uint64_t *N_data = new uint64_t[n + 1];
@@ -154,7 +152,7 @@ public:
         L = nav_tree(wm_aux, n);
     }
     /* FUNCIONES GRAFO*/
-    /*Primer grupo de operaciones: para un vertice y grafo sin filtrar*/
+    /*Primer grupo: para un vertice y el grafo sin filtrar*/
 
     uint64_t outdegree(uint64_t v)
     {
@@ -208,12 +206,12 @@ public:
     {
         std::vector<pair<uint64_t, uint64_t>> rneighboors;
         int64_t ind = indegree(v);
-        for (uint64_t i = 1; i <= ind; i++) 
+        for (uint64_t i = 1; i <= ind; i++)
             rneighboors.emplace_back(rneigh(v, i));
         return rneighboors;
     }
 
-    /*Segundo grupo de operaciones, para un vertice y un subgrafo con labels l */
+    /*Segundo grupo: para un vertice y el subgrafo con labels l */
 
     bool adj_l(uint64_t u, uint64_t v, uint64_t l)
     {
@@ -262,19 +260,9 @@ public:
         return B.select0(s) - s;
     }
 
-    std::vector<uint64_t> old_neigh_l_all(uint64_t v, uint64_t l)
-    {
-        std::vector<uint64_t> neighboors;
-        for (uint64_t i = 1; i <= outdegree_l(v, l); i++)
-            neighboors.emplace_back(neigh_l(v, i, l));
-        return neighboors;
-    }
-
     std::vector<uint64_t> neigh_l_all(uint64_t v, uint64_t l)
     {
         std::vector<uint64_t> neighboors;
-        // cout << "calculando neighs para obj, pred" << v << " - " << l << endl;
-
         uint64_t p = B.select(v) - v;
         uint64_t r = B_L.select(l) - l;
         uint64_t q = L.my_rank(p, l);
@@ -307,7 +295,7 @@ public:
         return rneighboors;
     }
 
-    /*Tercer grupo de operaciones para un subgrafo con labels l */
+    /*Tercer grupo: para el subgrafo con labels l */
 
     uint64_t count_l(uint64_t l)
     {
@@ -325,24 +313,27 @@ public:
     std::vector<pair<uint64_t, uint64_t>> access_l_all(uint64_t l)
     {
         std::vector<pair<uint64_t, uint64_t>> edges;
-        for (uint64_t i = 1; i <= count_l(l); i++)
+        uint64_t count = count_l(l);
+        for (uint64_t i = 1; i <= count; i++)
             edges.emplace_back(access_l(i, l));
         return edges;
     }
 
-    std::vector<uint64_t> targets_l(uint64_t l)
+    std::vector<uint64_t> targets_l(uint64_t l) // OJO! entrega repetidos
     {
+        // TODO: sacar repetidos usando bitvector como se hace en targets_l_bv, es mas rapido?
         std::vector<uint64_t> targets;
         uint64_t p1 = B_L.select(l) - l + 1;
         uint64_t p2 = B_L.select(l + 1) - (l + 1);
-        //     std::vector<std::array<uint64_t, 2ul>> ranges;
-        //     ranges.emplace_back({p1 - 1, p2 - 1});
-        //     ranges.emplace_back({p1 - 1, p2 - 1});
-        //     std::vector<std::pair<uint64_t, uint64_t>> values_freq = N.intersect(ranges);
-        //     for (uint64_t i = 0; i < values_freq.size(); ++i)
-        //         targets.emplace_back(values_freq[i].first);
+        // intersect solo implementabe para arboles traversables:
+        //      std::vector<std::array<uint64_t, 2ul>> ranges;
+        //      ranges.emplace_back({p1 - 1, p2 - 1});
+        //      ranges.emplace_back({p1 - 1, p2 - 1});
+        //      std::vector<std::pair<uint64_t, uint64_t>> values_freq = N.intersect(ranges);
+        //      for (uint64_t i = 0; i < values_freq.size(); ++i)
+        //          targets.emplace_back(values_freq[i].first);
         while (p1 - 1 < p2)
-        { // TODO optimizable
+        {
             targets.emplace_back(N.access(p1));
             p1++;
         }
@@ -370,6 +361,42 @@ public:
                 p = L.select(1 + aux, l);
         }
         return sources;
+    }
+
+    // modifica el bv targets tal que en la posicion i es 1 iff existe un triple (s,l,i) para algun s
+    void targets_l_bv(uint64_t l, bit_vector &targets)
+    {
+        uint64_t p1 = B_L.select(l) - l + 1;
+        uint64_t p2 = B_L.select(l + 1) - (l + 1);
+        while (p1 - 1 < p2)
+        {
+            targets[N.access(p1)] = 1;
+            p1++;
+        }
+        return;
+    }
+
+    // modifica el bv sources tal que en la posicion i es 1 iff existe un triple (i,l,s) para algun s
+    void sources_l_bv(uint64_t l, bit_vector &sources)
+    {
+        uint64_t c = 0;
+        uint64_t p = L.select(1, l);
+        uint64_t max_l = L.my_rank(n, l); // condicion para el select
+        uint64_t v;
+        uint64_t aux;
+
+        while (p < n + 1)
+        {
+            v = B.select0(p) - p;
+            sources[v] = 1;
+            c = B.succ(v + p) - (v + 1);
+            aux = L.my_rank(c, l);
+            if (aux == max_l)
+                p = n + 1;
+            else
+                p = L.select(1 + aux, l);
+        }
+        return;
     }
 
     /*FUNCIONES AUXILIARES*/
@@ -401,7 +428,7 @@ public:
         ifs >> max_S;
         ifs >> max_P;
         ifs >> max_O;
-
+        max_SO = max(max_S, max_O);
         L.load(filename + ".L", n);
         N.load(filename + ".N", n);
         B.load(filename + ".B", max_S + n);
@@ -411,78 +438,64 @@ public:
     /*FUNCIONES RPQ*/
 
     // caso ?x rpq ?y
-    void new_rpq_var_to_var(const std::string &rpq,
+    void rpq_var_to_var(const std::string &rpq,
                             unordered_map<std::string, uint64_t> &predicates_map,
                             std::vector<std::pair<uint64_t, uint64_t>> &output)
     {
 
-        // automata para query no reversa, se usa para obtener los sujetos
+        // automata para query no reversa, se usa para obtener los sujetos candidatos
         std::string query;
         int64_t i = 0;
         query = parse(rpq, i, predicates_map, max_P);
         RpqAutomata A(query, predicates_map);
 
-        // automata para query reversa,  se usa una vez se tienen los sujetos
+        // automata para query reversa, se usa para encontrar los objetos una vez se tienen los sujetos
         std::string query2;
         int64_t i2 = rpq.size() - 1;
         query2 = parse_reverse(rpq, i2, predicates_map, max_P);
         RpqAutomata A2(query2, predicates_map);
 
         // PASO 0: ver si se acepta solucion "todo objeto con si mismo"
-        bool empty_path_is_solution = false;
+        bool is_empty_path_solution = false;
         if (A.atFinal((word_t)1, FWD))
         {
-            empty_path_is_solution = true;
-            for (uint64_t obj = 1; obj <= max(max_O, max_S); ++obj)
+            is_empty_path_solution = true;
+            for (uint64_t obj = 1; obj <= max_SO; ++obj)
                 output.emplace_back(obj, obj);
             if (BOUND && output.size() >= BOUND)
                 return;
         }
 
-        std::vector<uint64_t> objects_var_to_var;
-        std::unordered_map<uint64_t, bool> seen_obj; // TODO optimizar, var para no repetir en paso 2 los objs de pbjects_var_to_var
-
-        // PASO 1; obtener objetos candidatos
-        new_rpq_var_to_var_get_o(A, predicates_map, objects_var_to_var);
-
-        // for (auto obj : objects_var_to_var)
-        // cout << "obj oarte 1;" << obj << endl;
+        // PASO 1; obtener sujetos candidatos
+        std::vector<uint64_t> subjects_var_to_var;
+        rpq_var_to_var_get_s(A, predicates_map, subjects_var_to_var);
 
         std::unordered_map<word_t, std::vector<uint64_t>> Q;
         std::unordered_map<uint64_t, word_t> seen;
 
-        for (uint64_t i = 0; i < objects_var_to_var.size(); i++)
+        for (uint64_t i = 0; i < subjects_var_to_var.size(); i++)
         {
-            // cout << "---" << objects_var_to_var[i] << endl;
+            // Q.clear();
+            if (is_empty_path_solution)
+                seen[subjects_var_to_var[i]] = (1 << 15); // objeto ya se agrego como respuesta
+            _rpq_one_const(A2, Q, seen, predicates_map, subjects_var_to_var[i], output, true);
+            seen.clear(); // TODO a priori tiene que estar descomentado pero si se guarda que ''Ds'' son exitosos y a que sijeto final corresponden se podria ahorrar(?)
 
-            if (!seen_obj[objects_var_to_var[i]])
+            if (BOUND && output.size() >= BOUND)
+                return;
+            // check timeout
+            if (TIME_OUT)
             {
-                seen_obj[objects_var_to_var[i]] = true;
-
-                // Q.clear();
-                if (empty_path_is_solution)
-                    seen[objects_var_to_var[i]] = (1 << 15); // objeto ya se agrego como respuesta
-                _new_rpq_one_const(A2, Q, seen, predicates_map, objects_var_to_var[i], output, true);
-                seen.clear(); // a priori tiene que estar descomentado pero
-                              // si se guarda que ''Ds'' son exitosos y a que sijeto final corresponden se podria ahorrar(?)
-
-                if (BOUND && output.size() >= BOUND)
+                time_span = duration_cast<microseconds>(high_resolution_clock::now() - query_start);
+                if (time_span.count() > TIME_OUT)
                     return;
-                // check timeout
-                if (TIME_OUT)
-                {
-                    time_span = duration_cast<microseconds>(high_resolution_clock::now() - query_start);
-                    if (time_span.count() > TIME_OUT)
-                        return;
-                }
             }
         }
     }
 
-    // version eficiente
-    void new_rpq_var_to_var_get_o(RpqAutomata &A,
+    void rpq_var_to_var_get_s(RpqAutomata &A,
                                   unordered_map<std::string, uint64_t> &predicates_map,
-                                  std::vector<uint64_t> &output_objects)
+                                  std::vector<uint64_t> &output)
     {
         word_t initial_D;
         initial_D = (word_t)1; // sudden eurobeat and the sound of car engines
@@ -497,12 +510,12 @@ public:
                 initial_predicates.emplace_back(pred_id);
         }
 
-        // PASO 2: obtener los ?x con sources o targets TODO optimizable: se peude invertir o no query segun ctdd preds negados para
-        // reemplazar algunos targets por sources o al reves
-        std::vector<uint64_t> initial_objects;
+        // PASO 2: obtener los ?x con sources o targets
+        // TODO optimizable: se puede invertir la query segun ctdd preds negados para reemplazar algunos targets por sources
+
+        bit_vector initial_subjects_bv = bit_vector(max_SO + 1, 0); // usar un bv ayuda a evitar sujetos repetidos
         for (uint64_t ini_pred : initial_predicates)
         {
-            // check timeout
             if (TIME_OUT)
             {
                 time_span = duration_cast<microseconds>(high_resolution_clock::now() - query_start);
@@ -511,18 +524,28 @@ public:
             }
 
             if (ini_pred <= max_P)
-                initial_objects = targets_l(ini_pred);
+                targets_l_bv(ini_pred, initial_subjects_bv);
             else
-                initial_objects = sources_l(ini_pred - max_P);
+                sources_l_bv(ini_pred - max_P, initial_subjects_bv);
+        }
 
-            output_objects.insert(output_objects.end(), initial_objects.begin(), initial_objects.end());
+        bv_rank_type rankbv(&initial_subjects_bv);
+        bv_select_type selectbv(&initial_subjects_bv);
+        uint64_t ones = rankbv(max_SO + 1);
+
+        // traducir objetos marcados en el bv a la id real
+        uint64_t subj_i = 1;
+        while (subj_i <= ones)
+        {
+            output.emplace_back(selectbv(subj_i));
+            subj_i++;
         }
     };
 
     /*Casos con una constante*/
 
     // nuevo caso: el primer paso de la iteracion sea sobre objetos en vez de preds
-    void new_rpq_one_const(const std::string &rpq,
+    void rpq_one_const(const std::string &rpq,
                            unordered_map<std::string, uint64_t> &predicates_map,
                            uint64_t initial_object,
                            std::vector<std::pair<uint64_t, uint64_t>> &output, bool is_const_to_var)
@@ -544,11 +567,11 @@ public:
 
         std::unordered_map<word_t, std::vector<uint64_t>> Q; // Q[word_t D] = lista con los predicados del automata que llegan a mis nodos activos. TODO: cambiar vector por bitmap
         std::unordered_map<uint64_t, word_t> seen;
- 
-        _new_rpq_one_const(A, Q, seen, predicates_map, initial_object, output, is_const_to_var);
+
+        _rpq_one_const(A, Q, seen, predicates_map, initial_object, output, is_const_to_var);
     };
 
-    bool _new_rpq_one_const(
+    bool _rpq_one_const(
         RpqAutomata &A, std::unordered_map<word_t, std::vector<uint64_t>> &Q,
         std::unordered_map<uint64_t, word_t> &seen,
         std::unordered_map<std::string, uint64_t> &predicates_map,
@@ -574,7 +597,6 @@ public:
 
         while (!ist_container.empty())
         {
-            // check timeout
             if (TIME_OUT)
             {
                 time_span = duration_cast<microseconds>(high_resolution_clock::now() - query_start);
@@ -588,17 +610,16 @@ public:
             current_D = ist_top.current_D;
             initial_object_vec = ist_top.ojects;
 
-            // cout << "  >PART1: PARA CADA OBJETO EN OBJETOS DE INDUCCION..." << endl;
+            // cout << "  >PART1: PARA CADA OBJETO EN DATA DE INDUCCION..." << endl;
             for (uint64_t obj : ist_top.ojects)
             {
                 filtered_D = ~seen[obj] & current_D; // dejar los nodos del automata no vistos aun
-                // filtered_D = filtered_D & ~(1 << 15); // no considerar el bit ''obj ya agregado a respuesta?''
-
+                // filtered_D = filtered_D & ~(1 << 15); //da igual, el mayor bit de current_D nunca deberia ser 1 
                 if (filtered_D) // quedan ''1s'' del automata por ver, else pasa al siguiente objeto
                 {
                     seen[obj] = seen[obj] | current_D;
 
-                    // PART2: CALCULAR Q SI NO ESTA PARA ESE D, que preds llegan a mis estados activos?
+                    // PART2: CALCULAR Q SI NO ESTA PARA ESE D: que preds llegan a mis estados activos?
                     if (Q.count(filtered_D) == 0) // TODO: es count lo mas rapido?
                     {
                         std::vector<uint64_t> valid_preds;
@@ -621,7 +642,7 @@ public:
                         std::vector<uint64_t> subjects_valid;
                         if (new_D != 0)
                         {
-                            // PART5: extraer los sujetos para ese pred + obj. OJO PASO COSTOSO!
+                            // PART5: extraer los sujetos para ese pred + obj. OJO: PASO COSTOSO!
                             if (pred <= max_P)
                             {
                                 // cout << "pred no es negado !!" << endl;
@@ -641,19 +662,18 @@ public:
                                     {
                                         if (~seen[sub] & (1 << 15))
                                         {
-                                            seen[sub] = seen[sub] | (1 << 15);
+                                            seen[sub] = seen[sub] | (1 << 15); //evita pares repetidos
                                             if (is_const_to_var)
                                                 solutions.emplace_back(initial_object, sub);
                                             else
                                                 solutions.emplace_back(sub, initial_object);
                                         }
                                     }
-                                    // v1.insert( v1.end(), v2.begin(), v2.end() );
 
                                     if (BOUND && solutions.size() >= BOUND)
                                         return false;
                                 }
-                                // cout << ">PART 5: actualizar container" << endl;
+                                // cout << "actualizar container" << endl;
                                 ist_container.push(induction_data{subjects_valid, new_D});
                             }
                         }
