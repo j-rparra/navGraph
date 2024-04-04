@@ -25,26 +25,26 @@ int main(int argc, char **argv)
     if (argc < 3 || cmdOptionExists(argv, argv + argc, "-h"))
     {
         cout << "  Usage: " << argv[0] << " <ring-index-file> <queries-file>" << endl;
-        cout << " -o <output-file>:  saves in <output-file>  the time used + the number of pairs obtained for each query" << endl;
+        // cout << " -o <output-file>:  saves in <output-file>  the time used + the number of pairs obtained for each query" << endl;
         exit(1);
     }
 
     // handle -o
-    ofstream out;
-    char *output_file = getCmdOption(argv, argv + argc, "-o");
-    string output_file_pairs;
-    if (output_file && OUTPUT_PAIRS)
-    {
-        output_file_pairs = (string)output_file;
-        output_file_pairs.append("_pairs");
-        out.open(output_file_pairs, ofstream::out | ofstream::trunc);
-        out.close();
-    }
-    if (output_file)
-    {
-        out.open(output_file, ofstream::out | ofstream::trunc);
-        out.close();
-    }
+    // ofstream out;
+    // char *output_file = getCmdOption(argv, argv + argc, "-o");
+    // string output_file_pairs;
+    // if (output_file && OUTPUT_PAIRS)
+    // {
+    //     output_file_pairs = (string)output_file;
+    //     output_file_pairs.append("_pairs");
+    //     out.open(output_file_pairs, ofstream::out | ofstream::trunc);
+    //     out.close();
+    // }
+    // if (output_file)
+    // {
+    //     out.open(output_file, ofstream::out | ofstream::trunc);
+    //     out.close();
+    // }
 
     nav_graph graph;
     graph.load(string(argv[1]));
@@ -95,6 +95,16 @@ int main(int argc, char **argv)
     std::vector<word_t> B_array(4 * graph.n, 0);
 
     high_resolution_clock::time_point stop; // start, stop;
+
+    // TMP
+    // high_resolution_clock::time_point query_start2;
+    // duration<double> time_span2;
+    // high_resolution_clock::time_point stop2;
+    uint64_t output_size = 0;
+    uint64_t output_size2 = 0;
+    targets_calls = 0;
+    sources_calls = 0;
+
     double total_time = 0.0;
 
     uint64_t n_predicates, n_operators;
@@ -282,53 +292,62 @@ int main(int argc, char **argv)
 
             if (!skip_flag)
             {
-                query_start = high_resolution_clock::now();
-                if (!flag_s and !flag_o)
+                for (size_t is_FWD = 0; is_FWD < 2; is_FWD++) // BWD luego FWD
                 {
-                    // cout << " ?x ?y " << endl;
-                    graph.rpq_var_to_var(query, pred_map, query_output);
-                }
-                else
-                {
-                    if (flag_s)
+
+                    query_output.clear();
+                    query_start = high_resolution_clock::now(); // FWD
+                    targets_calls = 0;
+                    sources_calls = 0;
+
+                    if (!flag_s and !flag_o) //?x ?y
                     {
-                        // cout << " ?y " << endl;
-                        graph.rpq_one_const(query, pred_map, s_id, query_output, true);
-                        // graph.rpq_one_const(query, pred_map, s_id, query_output, true);
+                        graph.rpq_no_const(query, pred_map, query_output, is_FWD);
+                        // stop = high_resolution_clock::now();
+                        // time_span_fwd = duration_cast<microseconds>(stop - query_start);
+                        // output_size = query_output.size()
+
+                        //                   query_start = high_resolution_clock::now(); // BWD
+                        // graph.rpq_no_const(query, pred_map, query_output_v2, false);
+                        // stop = high_resolution_clock::now();
+                        // time_span_bwd = duration_cast<microseconds>(stop - query_start);
                     }
                     else
                     {
-                        // cout << " ?x " << endl;
-                        graph.rpq_one_const(query, pred_map, o_id, query_output, false);
-                        // graph.rpq_one_const(query, pred_map, o_id, query_output, false);
+
+                        if (flag_s) //  " ?y "
+                        {
+                            // query_start = high_resolution_clock::now(); // FWD
+                            graph.rpq_one_const(query, pred_map, s_id, query_output, true, is_FWD);
+                            // stop = high_resolution_clock::now();
+
+                            // query_start2 = high_resolution_clock::now(); // BWD
+                            // graph.rpq_one_const(query, pred_map, s_id, query_output_v2, true, false);
+                            // stop2 = high_resolution_clock::now();
+                        }
+                        else //  " ?x "
+                        {
+                            // query_start = high_resolution_clock::now(); // FWD
+                            graph.rpq_one_const(query, pred_map, o_id, query_output, false, is_FWD);
+                            // stop = high_resolution_clock::now();
+
+                            // query_start2 = high_resolution_clock::now(); // BWD
+                            // graph.rpq_one_const(query, pred_map, o_id, query_output_v2, false, false);
+                            // stop2 = high_resolution_clock::now();
+                        }
                     }
-                }
-                stop = high_resolution_clock::now();
-                time_span = duration_cast<microseconds>(stop - query_start);
-                total_time = time_span.count();
+                    stop = high_resolution_clock::now();
+                    time_span = duration_cast<microseconds>(stop - query_start);
+                    total_time = time_span.count();
+                    cout << "\nisfwd" << is_FWD << ";" << q << ";" << query_output.size() << ";" << (uint64_t)(total_time * 1000000000ULL) << "; sourcescalls:"<< sources_calls <<" ; targetscalls:"<<targets_calls<< endl;
+                    // for (pair<uint64_t, uint64_t> pair : query_output)
+                    //     cout << pair.first << "-" << pair.second << endl;
 
-                cout << q << ";" << query_output.size() << ";" << (uint64_t)(total_time * 1000000000ULL) << endl;
-                // for (pair<uint64_t, uint64_t> pair : query_output)
-                //     cout << pair.first << "-" << pair.second << endl;
-
-                if (output_file)
-                {
-                    // write times + number of results
-                    out.open(output_file, std::ios::app);
-                    out << query_output.size() << "," << (uint64_t)(total_time * 1000000000ULL) << endl;
-                    out.close();
-
-                    // write times + number of results + pairs obtained
-                    if (OUTPUT_PAIRS)
-                    {
-                        out.open(output_file_pairs, std::ios::app);
-                        out << endl
-                            << q << ": " << line << endl;
-                        // out << query_output.size() << "," << (uint64_t)(total_time * 1000000000ULL) << endl;
-                        for (pair<uint64_t, uint64_t> pair : query_output)
-                            out << pair.first << "-" << pair.second << endl;
-                        out.close();
-                    }
+                    // time_span2 = duration_cast<microseconds>(stop2 - query_start2);
+                    // total_time2 = time_span2.count();
+                    // cout << "bwd;" << q << ";" << query_output_v2.size() << ";" << (uint64_t)(total_time2 * 1000000000ULL) << endl;
+                    // for (pair<uint64_t, uint64_t> pair : query_output_v2)
+                    //     cout << pair.first << "-" << pair.second << endl;
                 }
             }
             else

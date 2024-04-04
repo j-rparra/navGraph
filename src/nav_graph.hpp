@@ -24,9 +24,15 @@ using namespace std;
 
 typedef struct
 {
-    vector<uint64_t> ojects;
+    vector<uint64_t> objects;
     word_t current_D;
 } induction_data;
+
+typedef struct
+{
+    uint64_t ojects;
+    word_t current_D;
+} induction_data_v2; // para induccion sobre preds
 
 class nav_graph
 {
@@ -321,7 +327,7 @@ public:
 
     std::vector<uint64_t> targets_l(uint64_t l) // OJO! entrega repetidos
     {
-        // TODO: sacar repetidos usando bitvector como se hace en targets_l_bv, es mas rapido?
+        // TODO: sacar repetidos usando bitvector como se hace en targets_l_bv 
         std::vector<uint64_t> targets;
         uint64_t p1 = B_L.select(l) - l + 1;
         uint64_t p2 = B_L.select(l + 1) - (l + 1);
@@ -437,53 +443,92 @@ public:
 
     /*FUNCIONES RPQ*/
 
-    // caso ?x rpq ?y
-    void rpq_var_to_var(const std::string &rpq,
-                            unordered_map<std::string, uint64_t> &predicates_map,
-                            std::vector<std::pair<uint64_t, uint64_t>> &output)
+    // caso ?x rpq ?y intentanto evitar TARGETS
+    void rpq_no_const(const std::string &rpq,
+                      unordered_map<std::string, uint64_t> &predicates_map,
+                      std::vector<std::pair<uint64_t, uint64_t>> &output, bool FWD_navigation)
     {
-
-        // automata para query no reversa, se usa para obtener los sujetos candidatos
+        // automata para query no reversa,
         std::string query;
         int64_t i = 0;
         query = parse(rpq, i, predicates_map, max_P);
         RpqAutomata A(query, predicates_map);
 
-        // automata para query reversa, se usa para encontrar los objetos una vez se tienen los sujetos
+        // automata para query reversa
         std::string query2;
         int64_t i2 = rpq.size() - 1;
         query2 = parse_reverse(rpq, i2, predicates_map, max_P);
         RpqAutomata A2(query2, predicates_map);
 
-        // PASO 0: ver si se acepta solucion "todo objeto con si mismo"
-        bool is_empty_path_solution = false;
-        if (A.atFinal((word_t)1, FWD))
+        uint64_t FWD_target_calls = 0, BWD_target_calls = 0;
+
+        // count targets calls
+        for (auto &pred : predicates_map)
         {
-            is_empty_path_solution = true;
-            for (uint64_t obj = 1; obj <= max_SO; ++obj)
-                output.emplace_back(obj, obj);
-            if (BOUND && output.size() >= BOUND)
-                return;
+            word_t new_D;
+            uint64_t pred_id = pred.second;
+
+            new_D = (word_t)A.next((word_t)1, pred_id, FWD); // FWD A
+            if (new_D != 0)
+            {
+                if (pred_id <= max_P) // hara targets
+                    FWD_target_calls++;
+            }
+
+            if ((word_t)A.getFinalStates() & A.getB()[pred_id])
+            {
+                if (pred_id > max_P)
+                    BWD_target_calls++;
+            }
         }
 
-        // PASO 1; obtener sujetos candidatos
-        std::vector<uint64_t> subjects_var_to_var;
-        rpq_var_to_var_get_s(A, predicates_map, subjects_var_to_var);
+        // T1
+    
+        bit_vector initial_constants = bit_vector(max_SO + 1, 0);
+
+        if (BWD_target_calls < FWD_target_calls)
+        {
+            rpq_get_const(A, predicates_map, initial_constants, false);
+        }
+        else
+        {
+            rpq_get_const(A, predicates_map, initial_constants, true);
+        }
 
         std::unordered_map<word_t, std::vector<uint64_t>> Q;
         std::unordered_map<uint64_t, word_t> seen;
 
-        for (uint64_t i = 0; i < subjects_var_to_var.size(); i++)
+        bv_rank_type rankbv(&initial_constants);
+        bv_select_type selectbv(&initial_constants);
+        uint64_t ones = rankbv(max_SO + 1);
+
+
+        // T2, TODO reemplazar bv con plain array, mas rapido 
+  
+
+        for (uint64_t i = 1; i <= ones; i++)
         {
-            // Q.clear();
-            if (is_empty_path_solution)
-                seen[subjects_var_to_var[i]] = (1 << 15); // objeto ya se agrego como respuesta
-            _rpq_one_const(A2, Q, seen, predicates_map, subjects_var_to_var[i], output, true);
-            seen.clear(); // TODO a priori tiene que estar descomentado pero si se guarda que ''Ds'' son exitosos y a que sijeto final corresponden se podria ahorrar(?)
+
+            uint64_t constant = selectbv(i); // traducir objetos marcados en el bv a la id real
+
+            if (BWD_target_calls < FWD_target_calls)
+            {
+                if (FWD_navigation)
+                    _rpq_one_const(A2, Q, seen, predicates_map, constant, output, false, true);
+                else
+                    _rpq_one_const(A, Q, seen, predicates_map, constant, output, false, false);
+            }
+            else
+            {
+                if (FWD_navigation)
+                    _rpq_one_const(A, Q, seen, predicates_map, constant, output, true, true);
+                else
+                    _rpq_one_const(A2, Q, seen, predicates_map, constant, output, true, false);
+            }
+            seen.clear();
 
             if (BOUND && output.size() >= BOUND)
                 return;
-            // check timeout
             if (TIME_OUT)
             {
                 time_span = duration_cast<microseconds>(high_resolution_clock::now() - query_start);
@@ -493,27 +538,33 @@ public:
         }
     }
 
-    void rpq_var_to_var_get_s(RpqAutomata &A,
-                                  unordered_map<std::string, uint64_t> &predicates_map,
-                                  std::vector<uint64_t> &output)
+    void rpq_get_const(RpqAutomata &A,
+                       unordered_map<std::string, uint64_t> &predicates_map,
+                       bit_vector &output, bool is_FWD)
+
     {
         word_t initial_D;
-        initial_D = (word_t)1; // sudden eurobeat and the sound of car engines
+        initial_D = (word_t)1;
         std::vector<uint64_t> initial_predicates;
 
-        // PASO 1: ver que predicados salen del initial D
+        // PASO 1: ver que predicados salen del initial D (sea F o q0)
         for (auto &pred : predicates_map)
         {
             uint64_t pred_id = pred.second;
-            word_t new_D = (word_t)A.next(initial_D, pred_id, FWD);
-            if (new_D != 0) // es valido!
-                initial_predicates.emplace_back(pred_id);
+            if (is_FWD)
+            {
+                word_t new_D = (word_t)A.next(initial_D, pred_id, FWD);
+                if (new_D != 0)
+                    initial_predicates.emplace_back(pred_id);
+            }
+            else
+            {
+                if ((word_t)A.getFinalStates() & A.getB()[pred_id])
+                    initial_predicates.emplace_back(pred_id);
+            }
         }
 
         // PASO 2: obtener los ?x con sources o targets
-        // TODO optimizable: se puede invertir la query segun ctdd preds negados para reemplazar algunos targets por sources
-
-        bit_vector initial_subjects_bv = bit_vector(max_SO + 1, 0); // usar un bv ayuda a evitar sujetos repetidos
         for (uint64_t ini_pred : initial_predicates)
         {
             if (TIME_OUT)
@@ -524,36 +575,39 @@ public:
             }
 
             if (ini_pred <= max_P)
-                targets_l_bv(ini_pred, initial_subjects_bv);
+            {
+                if (is_FWD)
+                {
+                    // cout << "TARGET" << endl;
+                    targets_l_bv(ini_pred, output);
+                }
+                else
+                    sources_l_bv(ini_pred, output);
+            }
             else
-                sources_l_bv(ini_pred - max_P, initial_subjects_bv);
-        }
-
-        bv_rank_type rankbv(&initial_subjects_bv);
-        bv_select_type selectbv(&initial_subjects_bv);
-        uint64_t ones = rankbv(max_SO + 1);
-
-        // traducir objetos marcados en el bv a la id real
-        uint64_t subj_i = 1;
-        while (subj_i <= ones)
-        {
-            output.emplace_back(selectbv(subj_i));
-            subj_i++;
+            {
+                if (is_FWD)
+                    sources_l_bv(ini_pred - max_P, output);
+                else
+                {
+                    // cout << "TARGET" << endl;
+                    targets_l_bv(ini_pred - max_P, output);
+                }
+            }
         }
     };
 
     /*Casos con una constante*/
 
-    // nuevo caso: el primer paso de la iteracion sea sobre objetos en vez de preds
     void rpq_one_const(const std::string &rpq,
-                           unordered_map<std::string, uint64_t> &predicates_map,
-                           uint64_t initial_object,
-                           std::vector<std::pair<uint64_t, uint64_t>> &output, bool is_const_to_var)
+                       unordered_map<std::string, uint64_t> &predicates_map,
+                       uint64_t initial_object,
+                       std::vector<std::pair<uint64_t, uint64_t>> &solutions, bool left_const, bool FWD_navigation)
     {
 
         std::string query, str_aux;
 
-        if (is_const_to_var)
+        if ((left_const && !FWD_navigation) || (FWD_navigation && !left_const))
         {
             int64_t iii = rpq.size() - 1;
             query = parse_reverse(rpq, iii, predicates_map, max_P);
@@ -568,7 +622,7 @@ public:
         std::unordered_map<word_t, std::vector<uint64_t>> Q; // Q[word_t D] = lista con los predicados del automata que llegan a mis nodos activos. TODO: cambiar vector por bitmap
         std::unordered_map<uint64_t, word_t> seen;
 
-        _rpq_one_const(A, Q, seen, predicates_map, initial_object, output, is_const_to_var);
+        _rpq_one_const(A, Q, seen, predicates_map, initial_object, solutions, left_const, FWD_navigation);
     };
 
     bool _rpq_one_const(
@@ -577,18 +631,21 @@ public:
         std::unordered_map<std::string, uint64_t> &predicates_map,
         uint64_t initial_object,
         std::vector<std::pair<uint64_t, uint64_t>> &solutions,
-        bool is_const_to_var)
+        bool left_const, bool FWD_navigation)
     {
 
-        word_t current_D, filtered_D;             // palabra de maquina D, con los estados activos
-        std::stack<induction_data> ist_container; // data induccion:  sujetos obtenidos + D
-        current_D = (word_t)A.getFinalStates();
+        word_t current_D, filtered_D, finalStates; // palabra de maquina D, con los estados activos
+        std::stack<induction_data> ist_container;  // data induccion:  sujetos obtenidos + D
 
-        // second condition should be false iff  the call is from the var_to_var case
-        if (A.atFinal(current_D, BWD) && !(seen[initial_object] & (1 << 15)))
+        if (!FWD_navigation)
         {
-            solutions.emplace_back(initial_object, initial_object);
-            seen[initial_object] = seen[initial_object] | (1 << 15);
+            current_D = (word_t)A.getFinalStates();
+            finalStates = (word_t)1;
+        }
+        else
+        {
+            current_D = (word_t)1;
+            finalStates = (word_t)A.getFinalStates();
         }
 
         std::vector<uint64_t> initial_object_vec;
@@ -606,30 +663,66 @@ public:
 
             induction_data ist_top = ist_container.top();
             ist_container.pop();
-
             current_D = ist_top.current_D;
-            initial_object_vec = ist_top.ojects;
-
-            // cout << "  >PART1: PARA CADA OBJETO EN DATA DE INDUCCION..." << endl;
-            for (uint64_t obj : ist_top.ojects)
+            initial_object_vec = ist_top.objects;
+            for (uint64_t obj : ist_top.objects)
             {
-                filtered_D = ~seen[obj] & current_D; // dejar los nodos del automata no vistos aun
-                // filtered_D = filtered_D & ~(1 << 15); //da igual, el mayor bit de current_D nunca deberia ser 1 
-                if (filtered_D) // quedan ''1s'' del automata por ver, else pasa al siguiente objeto
-                {
-                    seen[obj] = seen[obj] | current_D;
+                // if ((!FWD_navigation && A.atFinal(current_D, BWD)) || (FWD_navigation && A.atFinal(current_D, FWD)))
+                // {
+                //     if (!(seen[obj] & finalStates))
+                //     {
+                //         if (left_const)
+                //             solutions.emplace_back(initial_object, obj);
+                //         else
+                //             solutions.emplace_back(obj, initial_object);
+                //     }
 
-                    // PART2: CALCULAR Q SI NO ESTA PARA ESE D: que preds llegan a mis estados activos?
-                    if (Q.count(filtered_D) == 0) // TODO: es count lo mas rapido?
+                //     if (BOUND && solutions.size() >= BOUND)
+                //         return false;
+                // }
+
+
+                // filtered_D = ~seen[obj] & current_D; // dejar los nodos del automata no vistos aun
+                // seen[obj] = seen[obj] | current_D;
+
+                uint64_t seenD = seen[obj];
+                filtered_D = ~seenD & current_D; // dejar los nodos del automata no vistos aun
+                seen[obj] = seenD | current_D;
+
+                if (filtered_D)
+                {
+                    if ((FWD_navigation && A.atFinal(filtered_D, FWD)) || (!FWD_navigation && A.atFinal(filtered_D, BWD)))
+                    {
+                        if (!(seenD & finalStates))
+                        {
+                            if (left_const)
+                                solutions.emplace_back(initial_object, obj);
+                            else
+                                solutions.emplace_back(obj, initial_object);
+                        }
+
+                        if (BOUND && solutions.size() >= BOUND)
+                            return false;
+                    }
+
+                    // PART2: COMPUTE Q FOR THAT D
+                    if (Q.count(filtered_D) == 0)
                     {
                         std::vector<uint64_t> valid_preds;
                         for (auto &pred : predicates_map)
                         {
                             uint64_t pred_id = pred.second;
-                            // cout << "condicion D AND B[p] es: " << std::bitset<16>(current_D & A.getB()[pred_id]) << endl;
 
-                            if (filtered_D & A.getB()[pred_id])
-                                valid_preds.emplace_back(pred_id);
+                            if (!FWD_navigation)
+                            {
+                                if (filtered_D & A.getB()[pred_id])
+                                    valid_preds.emplace_back(pred_id);
+                            }
+                            else
+                            {
+                                if ((word_t)A.next(filtered_D, pred_id, FWD) != 0)
+                                    valid_preds.emplace_back(pred_id);
+                            }
                         }
                         Q[filtered_D] = valid_preds;
                     }
@@ -637,44 +730,35 @@ public:
                     // PART3: FOR EACH PREDICATE THAT REACHES FILTERED_D
                     for (uint64_t pred : Q[filtered_D])
                     {
-                        word_t new_D = (word_t)A.next(filtered_D, pred, BWD);
+                        word_t new_D;
+                        if (!FWD_navigation)
+                            new_D = (word_t)A.next(filtered_D, pred, BWD);
+                        else
+                            new_D = (word_t)A.next(filtered_D, pred, FWD);
 
-                        std::vector<uint64_t> subjects_valid;
+                        std::vector<uint64_t> new_nodes;
                         if (new_D != 0)
                         {
-                            // PART5: extraer los sujetos para ese pred + obj. OJO: PASO COSTOSO!
-                            if (pred <= max_P)
+                            // PART5: extraer los sujetos/objetos para ese pred + obj
+                            if ((!FWD_navigation && (pred <= max_P)) || (FWD_navigation && (pred > max_P)))
                             {
-                                // cout << "pred no es negado !!" << endl;
-                                subjects_valid = neigh_l_all(obj, pred);
+                                if (!FWD_navigation)
+                                    new_nodes = neigh_l_all(obj, pred);
+                                else
+                                    new_nodes = neigh_l_all(obj, pred - max_P);
                             }
                             else
                             {
-                                // cout << "pred negado" << endl;
-                                subjects_valid = rneigh_l_all(obj, pred - max_P);
+                                if (!FWD_navigation)
+                                    new_nodes = rneigh_l_all(obj, pred - max_P);
+                                else
+                                    new_nodes = rneigh_l_all(obj, pred);
                             }
 
-                            if (!subjects_valid.empty())
+                            if (!new_nodes.empty())
                             {
-                                if (A.atFinal(new_D, BWD))
-                                {
-                                    for (uint64_t sub : subjects_valid)
-                                    {
-                                        if (~seen[sub] & (1 << 15))
-                                        {
-                                            seen[sub] = seen[sub] | (1 << 15); //evita pares repetidos
-                                            if (is_const_to_var)
-                                                solutions.emplace_back(initial_object, sub);
-                                            else
-                                                solutions.emplace_back(sub, initial_object);
-                                        }
-                                    }
-
-                                    if (BOUND && solutions.size() >= BOUND)
-                                        return false;
-                                }
                                 // cout << "actualizar container" << endl;
-                                ist_container.push(induction_data{subjects_valid, new_D});
+                                ist_container.push(induction_data{new_nodes, new_D});
                             }
                         }
                     }
